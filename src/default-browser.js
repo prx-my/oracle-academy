@@ -397,15 +397,41 @@ function windowsChromiumKey(browser) {
   return dpapiUnprotect(blob);
 }
 
+function sleepSync(ms) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    /* spin briefly */
+  }
+}
+
+// Windows keeps the SQLite DB locked while the browser is running, and
+// copyFileSync (CopyFileEx) fails with EBUSY. Node opens files with FILE_SHARE_*
+// so a plain read succeeds against a live DB; retry in case of a transient lock.
+function copyFileLoose(src, dest) {
+  const retryable = new Set(['EBUSY', 'EPERM', 'EACCES']);
+  let lastErr;
+  for (let i = 0; i < 6; i++) {
+    try {
+      fs.writeFileSync(dest, fs.readFileSync(src));
+      return;
+    } catch (err) {
+      lastErr = err;
+      if (!retryable.has(err && err.code)) throw err;
+      sleepSync(200);
+    }
+  }
+  throw lastErr;
+}
+
 function copyToTemp(file) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'oa-cookies-'));
   const dest = path.join(dir, path.basename(file));
-  fs.copyFileSync(file, dest);
+  copyFileLoose(file, dest);
   for (const suffix of ['-wal', '-shm']) {
     const extra = file + suffix;
     if (fs.existsSync(extra)) {
       try {
-        fs.copyFileSync(extra, dest + suffix);
+        copyFileLoose(extra, dest + suffix);
       } catch {
         /* best effort */
       }
@@ -440,7 +466,8 @@ function querySqliteJson(dbFile, sql) {
   if (IS_WIN) {
     const sqlite = getNodeSqlite();
     if (sqlite && sqlite.DatabaseSync) {
-      const database = new sqlite.DatabaseSync(dbFile, { readOnly: true });
+      // Open the temp copy read-write so SQLite can recover a copied -wal.
+      const database = new sqlite.DatabaseSync(dbFile);
       try {
         return database.prepare(sql).all();
       } finally {
