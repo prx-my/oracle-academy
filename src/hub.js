@@ -121,39 +121,75 @@ async function openClass(context, classCourseId) {
   return { page, cls: target };
 }
 
-/** List the sections of a class (page 14 -> page 15 links). */
-async function listSections(context, classCourseId) {
-  const { page, cls } = await openClass(context, classCourseId);
-  const sections = await page.evaluate(() => {
+const NAV_LABEL_RE =
+  /^(skip to main content|home|help|language|student|my profile|sign out|sign in|search|menu)$/i;
+
+// Read the course-outline links from page 14. Header/nav links can briefly carry
+// the same P15_ID,P15_COURSE_ID,P15_CLASS_COURSE_ID params, so callers must wait
+// for real section links (unique ids, non-nav labels) before trusting them.
+function readSectionLinks(page) {
+  return page.evaluate(() => {
     const clean = (s) => (s || '').replace(/\s+/g, ' ').trim();
     const out = [];
     for (const a of document.querySelectorAll('a[href]')) {
-      if (!/FROM_COURSE_OUTLINE/.test(a.href)) continue;
-      const m = a.href.match(/P15_ID,P15_COURSE_ID,P15_CLASS_COURSE_ID:(\d+),(\d+),(\d+)/);
+      const href = a.href || '';
+      if (!/FROM_COURSE_OUTLINE/.test(href)) continue;
+      const m = href.match(/P15_ID,P15_COURSE_ID,P15_CLASS_COURSE_ID:(\d+),(\d+),(\d+)/);
       if (!m) continue;
       out.push({
         name: clean(a.textContent).replace(/\s*\d+%\s*$/, '').trim(),
         p15Id: m[1],
         courseId: m[2],
         classCourseId: m[3],
-        url: a.href
+        url: href
       });
     }
     return out;
   });
+}
+
+async function waitForSections(page, timeoutMs = 15000) {
+  const deadline = Date.now() + timeoutMs;
+  let sections = [];
+  do {
+    const seen = new Set();
+    sections = (await readSectionLinks(page)).filter((s) => {
+      if (!s.name || NAV_LABEL_RE.test(s.name)) return false;
+      if (seen.has(s.p15Id)) return false;
+      seen.add(s.p15Id);
+      return true;
+    });
+    if (sections.length) break;
+    await page.waitForTimeout(500);
+  } while (Date.now() < deadline);
+  return sections;
+}
+
+/** List the sections of a class (page 14 -> page 15 links). */
+async function listSections(context, classCourseId) {
+  const { page, cls } = await openClass(context, classCourseId);
+  const sections = await waitForSections(page);
   return { cls, sections };
 }
 
 /** Open a section (page 15) inside a class. */
 async function openSection(context, classCourseId, sectionP15Id) {
   const { page } = await openClass(context, classCourseId);
-  const href = await page.evaluate((sid) => {
-    for (const a of document.querySelectorAll('a[href]')) {
-      const m = a.href.match(/P15_ID,P15_COURSE_ID,P15_CLASS_COURSE_ID:(\d+),/);
-      if (m && m[1] === sid) return a.href;
-    }
-    return null;
-  }, String(sectionP15Id));
+  const deadline = Date.now() + 15000;
+  let href = null;
+  do {
+    href = await page.evaluate((sid) => {
+      for (const a of document.querySelectorAll('a[href]')) {
+        const h = a.href || '';
+        if (!/FROM_COURSE_OUTLINE/.test(h)) continue;
+        const m = h.match(/P15_ID,P15_COURSE_ID,P15_CLASS_COURSE_ID:(\d+),/);
+        if (m && m[1] === sid) return h;
+      }
+      return null;
+    }, String(sectionP15Id));
+    if (href) break;
+    await page.waitForTimeout(500);
+  } while (Date.now() < deadline);
   if (!href) throw new Error(`Section ${sectionP15Id} not found`);
   await page.goto(href, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(3000);
