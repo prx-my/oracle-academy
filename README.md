@@ -76,6 +76,11 @@ are decrypted with DPAPI. Reading Windows cookies needs **Node.js 22.5 or newer*
 (built-in SQLite) or a `sqlite3` binary on `PATH`; otherwise use
 `login --playwright`.
 
+> **Chrome/Edge 127+ (App-Bound Encryption):** these browsers encrypt new cookies
+> with a key that DPAPI can no longer unwrap (`v20`), so `login` may find cookies
+> it can't decrypt. In that case use `login --playwright`, or sign in with
+> **Firefox** and run `login --browser firefox`.
+
 Diagnose cookie access with:
 
 ```bash

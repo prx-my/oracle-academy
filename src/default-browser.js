@@ -295,6 +295,19 @@ function cookieStoreReadable(browser) {
 /* reading + decrypting                                                */
 /* ------------------------------------------------------------------ */
 
+// Modern Chromium keeps the cookie DB at <profile>/Network/Cookies (Chrome 96+);
+// older builds used <profile>/Cookies directly. Return whichever exists.
+function chromiumCookieFile(dataDir, profile) {
+  const candidates = [
+    path.join(dataDir, profile, 'Network', 'Cookies'),
+    path.join(dataDir, profile, 'Cookies')
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
+
 function profileDirs(browser) {
   if (browser.kind === 'firefox') return firefoxProfileDirs(browser);
   const dirs = [];
@@ -307,7 +320,7 @@ function profileDirs(browser) {
   for (const name of entries) {
     if (name === 'Guest Profile' || name === 'System Profile') continue;
     if (name !== 'Default' && !/^Profile /.test(name)) continue;
-    if (fs.existsSync(path.join(browser.dataDir, name, 'Cookies'))) dirs.push(name);
+    if (chromiumCookieFile(browser.dataDir, name)) dirs.push(name);
   }
   return dirs;
 }
@@ -499,8 +512,8 @@ function readChromiumCookies(browser, opts = {}) {
   const key = chromiumKey(browser);
   const cookies = [];
   for (const profile of profileDirs(browser)) {
-    const db = path.join(browser.dataDir, profile, 'Cookies');
-    if (!fs.existsSync(db)) continue;
+    const db = chromiumCookieFile(browser.dataDir, profile);
+    if (!db) continue;
     const { dir, dest } = copyToTemp(db);
     try {
       const rows = querySqliteJson(
@@ -625,6 +638,7 @@ module.exports = {
   chromeTimeToUnix,
   sameSiteFromChromium,
   profileDirs,
+  chromiumCookieFile,
   BROWSERS,
   WIN_BROWSERS,
   ALIASES,

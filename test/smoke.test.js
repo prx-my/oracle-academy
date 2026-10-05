@@ -40,4 +40,31 @@ assert.strictEqual(db.sameSiteFromChromium(1), 'Lax');
 assert.strictEqual(db.sameSiteFromChromium(2), 'Strict');
 assert.strictEqual(db.sameSiteFromChromium(-1), undefined);
 
+// Chromium cookie DB lives under <profile>/Network/Cookies on modern builds and
+// <profile>/Cookies on older ones; profileDirs must find both.
+{
+  const fs = require('fs');
+  const os = require('os');
+  const path = require('path');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'oa-profile-'));
+  try {
+    fs.mkdirSync(path.join(root, 'Default', 'Network'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'Default', 'Network', 'Cookies'), '');
+    fs.mkdirSync(path.join(root, 'Profile 1'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'Profile 1', 'Cookies'), '');
+    fs.mkdirSync(path.join(root, 'Guest Profile'), { recursive: true });
+
+    const browser = { kind: 'chromium', dataDir: root };
+    assert.deepStrictEqual(db.profileDirs(browser).sort(), ['Default', 'Profile 1']);
+    assert.match(
+      db.chromiumCookieFile(root, 'Default'),
+      /[\\/]Network[\\/]Cookies$/
+    );
+    assert.match(db.chromiumCookieFile(root, 'Profile 1'), /[\\/]Cookies$/);
+    assert.strictEqual(db.chromiumCookieFile(root, 'Guest Profile'), null);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+}
+
 console.log('smoke: ok');

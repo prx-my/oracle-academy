@@ -267,7 +267,7 @@ function cmdCookies(opts) {
     process.exitCode = 1;
     return;
   }
-  process.stdout.write(`\nDefault browser: ${browser.name} (${browser.bundle})\n`);
+  process.stdout.write(`\nDefault browser: ${browser.name} (${browser.bundle || browser.id})\n`);
   process.stdout.write(`Cookie store:    ${browser.dataDir}\n`);
 
   const readable = oa.cookieStoreReadable(browser);
@@ -290,6 +290,20 @@ function cmdCookies(opts) {
   process.stdout.write(`Oracle cookies:  ${cookies.length}\n\n`);
   for (const c of cookies) {
     process.stdout.write(`  ${c.domain}  ${c.name}  (${c.value.length} chars)\n`);
+  }
+
+  if (!cookies.length) {
+    process.stdout.write(
+      `\nNo Oracle cookies in ${browser.name}. Sign in to Oracle Academy in ` +
+        `${browser.name}, or pass the right browser with --browser <name>.\n`
+    );
+  } else if (cookies.every((c) => !c.value)) {
+    process.stdout.write(
+      '\nCookies were found but could not be decrypted. Chrome/Edge 127+ use ' +
+        'App-Bound Encryption (v20), which this tool cannot read.\n' +
+        'Use "oracle-academy login --playwright" (sign in inside the tool browser),\n' +
+        'or sign in with Firefox and run "oracle-academy login --browser firefox".\n'
+    );
   }
 }
 
