@@ -70,6 +70,12 @@ permissions. Force that path with:
 npx oracle-academy login --playwright
 ```
 
+On Windows, the same import works with Chrome, Edge, Brave, Chromium, Arc and
+Firefox: the default browser is read from the registry and Chromium cookie values
+are decrypted with DPAPI. Reading Windows cookies needs **Node.js 22.5 or newer**
+(built-in SQLite) or a `sqlite3` binary on `PATH`; otherwise use
+`login --playwright`.
+
 Diagnose cookie access with:
 
 ```bash
@@ -97,7 +103,9 @@ npx oracle-academy cookies
 | `doctor [--fix]` | Check Node, Playwright, Chromium, and login. |
 
 Use `npx oracle-academy` (or the global `oracle-academy` after `npm i -g`) for
-all commands. The examples below use `oracle-academy` for brevity.
+all commands. `oracle` is installed as a shorter alias, so `oracle login`,
+`oracle list`, etc. work the same (on Windows too). The examples below use
+`oracle-academy` for brevity.
 
 ## Student Hub
 

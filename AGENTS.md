@@ -21,6 +21,15 @@ prompting. macOS protects **browser** cookie stores with **Full Disk Access**;
 when reading is blocked, `login` falls back to signing in in the tool's browser
 (`loginInteractive`, same `y` prompt). `oracle-academy cookies` diagnoses the store.
 
+**Platform split in `src/default-browser.js`:** macOS reads Keychain-derived
+PBKDF2 keys (AES-128-CBC, `v10`/`v11`) and detects the default browser via
+LaunchServices; Windows reads the default browser from the registry, gets the
+Chromium key from `Local State` via DPAPI (PowerShell `ProtectedData`), and
+decrypts with AES-256-GCM. The branches are gated on `process.platform` and never
+run together. Windows uses Node's built-in `node:sqlite` (Node >= 22.5) instead
+of the `sqlite3` CLI; if neither is available, `login` falls back to
+`--playwright`.
+
 **Session model:** Oracle Academy's APEX cookie (`ORA_WWV_APP_63000`) is a *session*
 cookie, so it's lost when the browser closes and the server then rejects it.
 Therefore the tool keeps **one browser running** (`ensureBrowser` in

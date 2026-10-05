@@ -142,9 +142,12 @@ async function cmdLogin(opts) {
   if (!readable.ok) {
     if (browser) {
       process.stdout.write(
-        `\n${browser.name}'s cookie store is blocked by macOS (Full Disk Access required).\n` +
-          'Falling back to signing in in the tool browser — no permissions needed.\n' +
-          'To reuse your default browser instead, grant Full Disk Access and re-run.\n'
+        process.platform === 'win32'
+          ? `\n${browser.name}'s cookie store could not be read (${readable.reason || 'unavailable'}).\n` +
+              'Falling back to signing in in the tool browser — no permissions needed.\n'
+          : `\n${browser.name}'s cookie store is blocked by macOS (Full Disk Access required).\n` +
+              'Falling back to signing in in the tool browser — no permissions needed.\n' +
+              'To reuse your default browser instead, grant Full Disk Access and re-run.\n'
       );
     } else {
       process.stdout.write('\nSigning in in the tool browser.\n');
@@ -576,13 +579,15 @@ async function cmdDoctor(opts) {
 
   try {
     const b = oa.detectDefaultBrowser(opts.browser);
-    add('Default browser', true, `${b.name} (${b.bundle})`, '');
+    add('Default browser', true, `${b.name} (${b.bundle || b.id})`, '');
     const readable = oa.cookieStoreReadable(b);
     add(
-      'Cookie store (Full Disk Access)',
+      'Cookie store',
       readable.ok,
-      readable.ok ? b.dataDir : 'blocked by macOS',
-      'System Settings > Privacy & Security > Full Disk Access -> enable your terminal'
+      readable.ok ? b.dataDir : readable.reason || 'unreadable',
+      process.platform === 'win32'
+        ? 'close the browser and re-run, or use "oracle-academy login --playwright"'
+        : 'System Settings > Privacy & Security > Full Disk Access -> enable your terminal'
     );
   } catch (err) {
     add('Default browser', false, err.message, 'oracle-academy login --browser brave');

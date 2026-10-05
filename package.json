@@ -5,7 +5,8 @@
   "type": "commonjs",
   "main": "src/index.js",
   "bin": {
-    "oracle-academy": "bin/oracle-academy.js"
+    "oracle-academy": "bin/oracle-academy.js",
+    "oracle": "bin/oracle-academy.js"
   },
   "files": [
     "bin",
