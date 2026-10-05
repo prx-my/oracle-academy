@@ -155,6 +155,21 @@ async function cmdLogin(opts) {
     return cmdLoginPlaywright(opts);
   }
 
+  // On Windows the browser may hold the cookie DB locked (EBUSY) or use
+  // App-Bound Encryption. Probe once and fall back to the tool browser instead
+  // of looping on read errors.
+  if (browser && process.platform === 'win32') {
+    try {
+      oa.readCookies(browser, { domains: ['oracle'] });
+    } catch (err) {
+      process.stdout.write(
+        `\n${browser.name}'s cookie store is not usable (${String(err.message).split('\n')[0]}).\n` +
+          'Falling back to signing in in the tool browser — no permissions needed.\n'
+      );
+      return cmdLoginPlaywright(opts);
+    }
+  }
+
   return cmdLoginDefaultBrowser(opts, browser);
 }
 
@@ -166,6 +181,7 @@ async function cmdLoginDefaultBrowser(opts, browserDesc) {
       context,
       browser: opts.browser,
       hub: opts.hub,
+      abortOnReadError: true,
       confirm: interactive
         ? () =>
             waitForYes(
@@ -187,6 +203,14 @@ async function cmdLoginDefaultBrowser(opts, browserDesc) {
         }
       }
     });
+
+    if (res.readError) {
+      process.stdout.write(
+        `\n${browserDesc.name}'s cookie store can't be read (${String(res.readError).split('\n')[0]}).\n` +
+          'Falling back to signing in in the tool browser.\n'
+      );
+      return cmdLoginPlaywright(opts);
+    }
 
     if (res.ok) {
       process.stdout.write(

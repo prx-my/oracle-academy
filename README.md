@@ -81,6 +81,10 @@ are decrypted with DPAPI. Reading Windows cookies needs **Node.js 22.5 or newer*
 > it can't decrypt. In that case use `login --playwright`, or sign in with
 > **Firefox** and run `login --browser firefox`.
 
+On Windows, `login` probes the default browser's cookie store first; if it can't
+be read (locked DB or App-Bound Encryption), it automatically falls back to
+signing in inside the tool's own browser — no flag needed.
+
 Diagnose cookie access with:
 
 ```bash

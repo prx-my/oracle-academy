@@ -100,6 +100,9 @@ async function loginInteractive(context, opts = {}) {
  *   waits for the user to confirm (e.g. press y) before capturing the session;
  *   it asks again on each failed attempt until the session verifies or the user
  *   cancels. Without confirm it polls the cookie store automatically.
+ *   abortOnReadError: stop immediately (returning { readError }) when the cookie
+ *   store can't be read, so the caller can fall back to signing in in the tool
+ *   browser instead of retrying.
  */
 async function loginWithDefaultBrowser(opts = {}) {
   const context = opts.context;
@@ -140,6 +143,11 @@ async function loginWithDefaultBrowser(opts = {}) {
       cookies = db.readCookies(browser, { domains });
     } catch (err) {
       onStatus({ status: 'read-error', error: String(err && err.message) });
+      // On Windows the browser can lock its cookie DB; don't loop for minutes —
+      // let the caller fall back to signing in in the tool browser.
+      if (opts.abortOnReadError) {
+        return { ok: false, readError: String(err && err.message), browser, imported };
+      }
       continue;
     }
     if (!cookies.length) {
