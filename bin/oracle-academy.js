@@ -284,6 +284,15 @@ function cmdCookies(opts) {
     cookies = oa.readCookies(browser, { domains: ['oracle'] });
   } catch (err) {
     process.stderr.write(`Failed to read cookies: ${err.message}\n`);
+    if (/EBUSY|locked|sharing violation/i.test(err.message)) {
+      process.stderr.write(
+        `${browser.name} is holding its cookie database open. Close ${browser.name} ` +
+          '(or sign in with Firefox), then re-run:\n' +
+          `  oracle-academy login --browser ${browser.id || browser.bundle}\n` +
+          'Or skip the cookie store entirely:\n' +
+          '  oracle-academy login --playwright\n'
+      );
+    }
     process.exitCode = 1;
     return;
   }

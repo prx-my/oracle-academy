@@ -404,19 +404,46 @@ function sleepSync(ms) {
   }
 }
 
+function psQuote(value) {
+  return "'" + String(value).replace(/'/g, "''") + "'";
+}
+
+// Open the source with an explicit FileShare.ReadWrite and stream it to the
+// destination. Some Windows builds refuse Node's read handle (EBUSY) while the
+// browser holds the DB open, but allow this share mode.
+function copyViaPowerShell(src, dest) {
+  const script =
+    `$fs=[System.IO.File]::Open(${psQuote(src)},[System.IO.FileMode]::Open,` +
+    '[System.IO.FileAccess]::Read,[System.IO.FileShare]::ReadWrite); ' +
+    `$out=[System.IO.File]::Create(${psQuote(dest)}); ` +
+    '$fs.CopyTo($out); $out.Close(); $fs.Close()';
+  for (const shell of ['powershell.exe', 'pwsh']) {
+    try {
+      execFileSync(shell, ['-NoProfile', '-NonInteractive', '-Command', script], {
+        stdio: 'ignore'
+      });
+      return fs.existsSync(dest);
+    } catch {
+      /* try the next shell */
+    }
+  }
+  return false;
+}
+
 // Windows keeps the SQLite DB locked while the browser is running, and
-// copyFileSync (CopyFileEx) fails with EBUSY. Node opens files with FILE_SHARE_*
-// so a plain read succeeds against a live DB; retry in case of a transient lock.
+// copyFileSync (CopyFileEx) fails with EBUSY. Try a plain read first (Node opens
+// with FILE_SHARE_*), then fall back to PowerShell's FileShare.ReadWrite.
 function copyFileLoose(src, dest) {
   const retryable = new Set(['EBUSY', 'EPERM', 'EACCES']);
   let lastErr;
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 4; i++) {
     try {
       fs.writeFileSync(dest, fs.readFileSync(src));
       return;
     } catch (err) {
       lastErr = err;
       if (!retryable.has(err && err.code)) throw err;
+      if (IS_WIN && copyViaPowerShell(src, dest)) return;
       sleepSync(200);
     }
   }
@@ -452,10 +479,19 @@ let nodeSqliteChecked = false;
 function getNodeSqlite() {
   if (!nodeSqliteChecked) {
     nodeSqliteChecked = true;
+    // Suppress Node's "SQLite is an experimental feature" warning.
+    const origEmit = process.emitWarning;
+    process.emitWarning = (warning, ...rest) => {
+      const msg = typeof warning === 'string' ? warning : warning && warning.message;
+      if (/SQLite/i.test(msg || '') && /experimental/i.test(msg || '')) return;
+      return origEmit.call(process, warning, ...rest);
+    };
     try {
       nodeSqlite = require('node:sqlite');
     } catch {
       nodeSqlite = null;
+    } finally {
+      process.emitWarning = origEmit;
     }
   }
   return nodeSqlite;
