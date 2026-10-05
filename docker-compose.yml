@@ -1,0 +1,26 @@
+services:
+  app:
+    build: .
+    image: oracle-academy
+    container_name: oracle-academy
+    # noVNC web client for the login browser.
+    ports:
+      - "6080:6080"
+    # Persist the browser profile (and thus the saved session) across restarts.
+    volumes:
+      - oracle-data:/data
+    # Keep stdin/tty so the `login` y-prompt works.
+    stdin_open: true
+    tty: true
+    shm_size: "1gb"
+    # Answer-engine keys for `quiz run` (put them in a .env file).
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
+      - ORACLE_QUIZ_GEMINI_MODEL=${ORACLE_QUIZ_GEMINI_MODEL:-}
+      - ORACLE_QUIZ_OPENAI_MODEL=${ORACLE_QUIZ_OPENAI_MODEL:-}
+
+volumes:
+  oracle-data:

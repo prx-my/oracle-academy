@@ -1,0 +1,19 @@
+#!/usr/bin/env sh
+# Convenience wrapper: run oracle-academy commands inside the container.
+#
+#   ./oracle login
+#   ./oracle list
+#   ./oracle quiz start --class <classCourseId> --section <sectionId> --item <itemId>
+#
+# Starts the container if it isn't running yet.
+set -e
+cd "$(dirname "$0")"
+
+if ! docker compose ps --status running --services 2>/dev/null | grep -q '^app$'; then
+  echo "Starting container (noVNC at http://localhost:6080/vnc.html)..." >&2
+  docker compose up -d
+  # Give Xvfb/x11vnc/noVNC a moment to come up.
+  sleep 3
+fi
+
+exec docker compose exec app oracle-academy "$@"
