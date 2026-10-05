@@ -175,6 +175,42 @@ function spawnBrowser() {
   return child.pid;
 }
 
+/** List CDP targets on the shared browser (empty on any failure). */
+async function listTargets(timeoutMs = 1500) {
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    const res = await fetch(`${DEBUG_URL}/json/list`, { signal: ctrl.signal });
+    clearTimeout(timer);
+    return res.ok ? await res.json() : [];
+  } catch {
+    return [];
+  }
+}
+
+// Chrome 153+ can start with no page target, which makes connectOverCDP throw
+// "Browser context management is not supported". Create one over the DevTools
+// HTTP endpoint so there is a default context to attach to.
+async function ensurePageTarget() {
+  const targets = await listTargets();
+  if (targets.some((t) => t.type === 'page')) return true;
+  for (const method of ['PUT', 'GET']) {
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 2000);
+      const res = await fetch(`${DEBUG_URL}/json/new?about:blank`, {
+        method,
+        signal: ctrl.signal
+      });
+      clearTimeout(timer);
+      if (res.ok) return true;
+    } catch {
+      /* try the other method */
+    }
+  }
+  return false;
+}
+
 /**
  * Attach to the shared Oracle Academy browser, starting it if needed. The
  * browser is left running when the caller disconnects, so the logged-in session
@@ -195,7 +231,17 @@ async function ensureBrowser() {
       throw new Error(`The Oracle Academy browser did not start on port ${DEBUG_PORT}.`);
     }
   }
-  const browser = await chromium.connectOverCDP(DEBUG_URL);
+  await ensurePageTarget();
+  let browser;
+  try {
+    browser = await chromium.connectOverCDP(DEBUG_URL);
+  } catch (err) {
+    if (!/context management is not supported|setDownloadBehavior/i.test(String(err && err.message))) {
+      throw err;
+    }
+    await ensurePageTarget();
+    browser = await chromium.connectOverCDP(DEBUG_URL);
+  }
   const context = browser.contexts()[0] || (await browser.newContext());
   context.setDefaultTimeout(20000);
   context.setDefaultNavigationTimeout(45000);
@@ -303,6 +349,8 @@ async function isLoggedIn(context) {
 module.exports = {
   launch,
   ensureBrowser,
+  ensurePageTarget,
+  listTargets,
   disconnect,
   debugReady,
   DEBUG_PORT,

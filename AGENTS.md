@@ -38,6 +38,11 @@ CDP). Every command attaches, does its work, and disconnects **without closing**
 the browser. Never `browser.close()` the shared browser expecting to keep the
 session; use `disconnect`. Tell the user to keep the window open.
 
+Chrome 153+ starts with no page target, so `connectOverCDP` throws
+"Browser context management is not supported". `ensureBrowser` calls
+`ensurePageTarget()` first (DevTools `PUT /json/new?about:blank`) to create one
+before attaching.
+
 **Never type credentials for the user** — SSO is always manual. In the browser the
 flow is username → Next → password → Sign In (MFA if prompted).
 
